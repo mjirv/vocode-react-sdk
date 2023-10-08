@@ -1,9 +1,3 @@
-import {
-  IMediaRecorder,
-  MediaRecorder,
-  register,
-} from "extendable-media-recorder";
-import { connect } from "extendable-media-recorder-wav-encoder";
 import React from "react";
 import {
   ConversationConfig,
@@ -47,7 +41,7 @@ export const useConversation = (
   const [currentSpeaker, setCurrentSpeaker] =
     React.useState<CurrentSpeaker>("none");
   const [processing, setProcessing] = React.useState(false);
-  const [recorder, setRecorder] = React.useState<IMediaRecorder>();
+  const [recorder, setRecorder] = React.useState<MediaRecorder>();
   const [socket, setSocket] = React.useState<WebSocket>();
   const [status, setStatus] = React.useState<ConversationStatus>("idle");
   const [error, setError] = React.useState<Error>();
@@ -74,25 +68,16 @@ export const useConversation = (
         socket.send(stringify(audioMessage));
     });
   };
-  
+
   // once the conversation is connected, stream the microphone audio into the socket
   React.useEffect(() => {
     if (!recorder || !socket) return;
     if (status === "connected") {
       if (active)
         recorder.addEventListener("dataavailable", recordingDataListener);
-      else
-        recorder.removeEventListener("dataavailable", recordingDataListener);
+      else recorder.removeEventListener("dataavailable", recordingDataListener);
     }
   }, [recorder, socket, status, active]);
-
-  // accept wav audio from webpage
-  React.useEffect(() => {
-    const registerWav = async () => {
-      await register(await connect());
-    };
-    registerWav().catch(console.error);
-  }, []);
 
   // play audio that is queued
   React.useEffect(() => {

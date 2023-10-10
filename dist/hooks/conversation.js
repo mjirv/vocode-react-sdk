@@ -16,6 +16,7 @@ exports.useConversation = void 0;
 const react_1 = __importDefault(require("react"));
 const utils_1 = require("../utils");
 const react_device_detect_1 = require("react-device-detect");
+const recordrtc_1 = require("recordrtc");
 const VOCODE_API_URL = "api.vocode.dev";
 const DEFAULT_CHUNK_SIZE = 2048;
 const useConversation = (config) => {
@@ -50,17 +51,6 @@ const useConversation = (config) => {
                 socket.send((0, utils_1.stringify)(audioMessage));
         });
     };
-    // once the conversation is connected, stream the microphone audio into the socket
-    react_1.default.useEffect(() => {
-        if (!recorder || !socket)
-            return;
-        if (status === "connected") {
-            if (active)
-                recorder.addEventListener("dataavailable", recordingDataListener);
-            else
-                recorder.removeEventListener("dataavailable", recordingDataListener);
-        }
-    }, [recorder, socket, status, active]);
     // play audio that is queued
     react_1.default.useEffect(() => {
         const playArrayBuffer = (arrayBuffer) => {
@@ -102,7 +92,7 @@ const useConversation = (config) => {
         }
         if (!recorder || !socket)
             return;
-        recorder.stop();
+        recorder.stopRecording();
         const stopMessage = {
             type: "websocket_stop",
         };
@@ -263,11 +253,12 @@ const useConversation = (config) => {
         console.log("Access to microphone granted");
         console.log(startMessage);
         let recorderToUse = recorder;
-        if (recorderToUse && recorderToUse.state === "paused") {
-            recorderToUse.resume();
+        if (recorderToUse && (yield recorderToUse.getState()) === "paused") {
+            recorderToUse.resumeRecording();
         }
         else if (!recorderToUse) {
-            recorderToUse = new MediaRecorder(audioStream, {
+            recorderToUse = new recordrtc_1.RecordRTCPromisesHandler(audioStream, {
+                type: "audio",
                 mimeType: "audio/wav",
             });
             setRecorder(recorderToUse);
@@ -283,14 +274,14 @@ const useConversation = (config) => {
         else {
             timeSlice = 10;
         }
-        if (recorderToUse.state === "recording") {
+        if ((yield recorderToUse.getState()) === "recording") {
             // When the recorder is in the recording state, see:
             // https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/state
             // which is not expected to call `start()` according to:
             // https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/start.
             return;
         }
-        recorderToUse.start(timeSlice);
+        recorderToUse === null || recorderToUse === void 0 ? void 0 : recorderToUse.startRecording();
     });
     return {
         status,

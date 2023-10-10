@@ -1,9 +1,3 @@
-import {
-  IMediaRecorder,
-  MediaRecorder,
-  register,
-} from "extendable-media-recorder";
-import { connect } from "extendable-media-recorder-wav-encoder";
 import React from "react";
 import {
   ConversationConfig,
@@ -22,6 +16,7 @@ import {
 } from "../types/vocode/websocket";
 import { DeepgramTranscriberConfig, TranscriberConfig } from "../types";
 import { isSafari, isChrome } from "react-device-detect";
+import { RecordRTCPromisesHandler } from "recordrtc";
 
 const VOCODE_API_URL = "api.vocode.dev";
 const DEFAULT_CHUNK_SIZE = 2048;
@@ -46,7 +41,7 @@ export const useConversation = (
   const [currentSpeaker, setCurrentSpeaker] =
     React.useState<CurrentSpeaker>("none");
   const [processing, setProcessing] = React.useState(false);
-  const [recorder, setRecorder] = React.useState<IMediaRecorder>();
+  const [recorder, setRecorder] = React.useState<RecordRTCPromisesHandler>();
   const [socket, setSocket] = React.useState<WebSocket>();
   const [status, setStatus] = React.useState<ConversationStatus>("idle");
   const [error, setError] = React.useState<Error>();
@@ -73,25 +68,6 @@ export const useConversation = (
         socket.send(stringify(audioMessage));
     });
   };
-  
-  // once the conversation is connected, stream the microphone audio into the socket
-  React.useEffect(() => {
-    if (!recorder || !socket) return;
-    if (status === "connected") {
-      if (active)
-        recorder.addEventListener("dataavailable", recordingDataListener);
-      else
-        recorder.removeEventListener("dataavailable", recordingDataListener);
-    }
-  }, [recorder, socket, status, active]);
-
-  // accept wav audio from webpage
-  React.useEffect(() => {
-    const registerWav = async () => {
-      await register(await connect());
-    };
-    registerWav().catch(console.error);
-  }, []);
 
   // play audio that is queued
   React.useEffect(() => {
@@ -133,7 +109,7 @@ export const useConversation = (
       setStatus("idle");
     }
     if (!recorder || !socket) return;
-    recorder.stop();
+    recorder.stopRecording();
     const stopMessage: StopMessage = {
       type: "websocket_stop",
     };
@@ -341,10 +317,11 @@ export const useConversation = (
     console.log(startMessage);
 
     let recorderToUse = recorder;
-    if (recorderToUse && recorderToUse.state === "paused") {
-      recorderToUse.resume();
+    if (recorderToUse && (await recorderToUse.getState()) === "paused") {
+      recorderToUse.resumeRecording();
     } else if (!recorderToUse) {
-      recorderToUse = new MediaRecorder(audioStream, {
+      recorderToUse = new RecordRTCPromisesHandler(audioStream, {
+        type: "audio",
         mimeType: "audio/wav",
       });
       setRecorder(recorderToUse);
@@ -362,14 +339,14 @@ export const useConversation = (
       timeSlice = 10;
     }
 
-    if (recorderToUse.state === "recording") {
+    if ((await recorderToUse.getState()) === "recording") {
       // When the recorder is in the recording state, see:
       // https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/state
       // which is not expected to call `start()` according to:
       // https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/start.
       return;
     }
-    recorderToUse.start(timeSlice);
+    recorderToUse?.startRecording();
   };
 
   return {
